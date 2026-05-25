@@ -4,242 +4,160 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { Mic, MicOff, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-
-export type VoiceSendMeta = {
-  // TODO(BE 연동): 서버 STT 업로드용 원본 오디오
-  audioBlob?: Blob | null
-  // TODO(BE 연동): 업로드 메타(로그/제한 시간 검증)
-  audioDurationMs?: number
-}
+import {
+  isSpeechRecognitionSupported,
+  startSpeechRecognition,
+  type SpeechRecognitionSession,
+} from "@/lib/speech"
 
 interface VoiceInputProps {
-  onSendMessage: (message: string, meta?: VoiceSendMeta) => void
+  onSendMessage: (message: string) => Promise<void> | void
   disabled?: boolean
-}
-
-function pickRecorderMime(): string | undefined {
-  if (typeof MediaRecorder === "undefined") return undefined
-  const candidates = [
-    "audio/webm;codecs=opus",
-    "audio/webm",
-    "audio/mp4",
-    "audio/ogg;codecs=opus",
-  ]
-  for (const c of candidates) {
-    if (MediaRecorder.isTypeSupported(c)) return c
-  }
-  return undefined
 }
 
 export function VoiceInput({ onSendMessage, disabled }: VoiceInputProps) {
   const [isListening, setIsListening] = useState(false)
-  const [transcript, setTranscript] = useState("")
   const [inputText, setInputText] = useState("")
-  const [lastSentHint, setLastSentHint] = useState<string | null>(null)
+  const [isSending, setIsSending] = useState(false)
+  const [sttHint, setSttHint] = useState<string | null>(null)
+  const [sttSupported] = useState(() => isSpeechRecognitionSupported())
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
-  const recorderRef = useRef<MediaRecorder | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const chunksRef = useRef<BlobPart[]>([])
-  const recordStartedAtRef = useRef<number>(0)
-  const audioBlobRef = useRef<Blob | null>(null)
-  const audioDurationMsRef = useRef<number>(0)
+  const recognitionRef = useRef<SpeechRecognitionSession | null>(null)
+  const committedRef = useRef("")
 
-  const stopMediaRecording = useCallback(() => {
-    const rec = recorderRef.current
-    if (rec && rec.state !== "inactive") {
-      try {
-        rec.stop()
-      } catch {
-        streamRef.current?.getTracks().forEach((t) => t.stop())
-        streamRef.current = null
-        recorderRef.current = null
-      }
-      return
-    }
-    streamRef.current?.getTracks().forEach((t) => t.stop())
-    streamRef.current = null
-    recorderRef.current = null
-  }, [])
-
-  const startMediaRecording = useCallback(async (): Promise<boolean> => {
-    if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      return false
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      streamRef.current = stream
-      chunksRef.current = []
-      const mime = pickRecorderMime()
-      const mr = mime
-        ? new MediaRecorder(stream, { mimeType: mime })
-        : new MediaRecorder(stream)
-      mr.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data)
-      }
-      mr.onstop = () => {
-        const type = mr.mimeType || mime || "audio/webm"
-        const blob = new Blob(chunksRef.current, { type })
-        audioBlobRef.current = blob
-        audioDurationMsRef.current = Math.max(
-          0,
-          Date.now() - recordStartedAtRef.current
-        )
-        streamRef.current?.getTracks().forEach((t) => t.stop())
-        streamRef.current = null
-        recorderRef.current = null
-      }
-      recordStartedAtRef.current = Date.now()
-      mr.start(120)
-      recorderRef.current = mr
-      return true
-    } catch {
-      return false
-    }
+  const stopRecognition = useCallback(() => {
+    recognitionRef.current?.stop()
+    recognitionRef.current = null
+    setIsListening(false)
   }, [])
 
   useEffect(() => {
-    if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
-      const SpeechRecognition = window.webkitSpeechRecognition
-      recognitionRef.current = new SpeechRecognition()
-      recognitionRef.current.continuous = false
-      recognitionRef.current.interimResults = true
-      recognitionRef.current.lang = "ko-KR"
-
-      recognitionRef.current.onresult = (event) => {
-        const current = event.resultIndex
-        const result = event.results[current]
-        const text = result[0].transcript
-        setTranscript(text)
-        if (result.isFinal) {
-          setInputText(text)
-          setIsListening(false)
-          stopMediaRecording()
-        }
-      }
-
-      recognitionRef.current.onerror = () => {
-        setIsListening(false)
-        stopMediaRecording()
-      }
-
-      recognitionRef.current.onend = () => {
-        setIsListening(false)
-        stopMediaRecording()
-      }
-    }
-
     return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop()
-      }
-      stopMediaRecording()
+      recognitionRef.current?.abort()
+      recognitionRef.current = null
     }
-  }, [stopMediaRecording])
+  }, [])
 
-  const toggleListening = async () => {
-    if (!recognitionRef.current) {
-      alert("음성 인식이 지원되지 않는 브라우저입니다.")
+  const toggleListening = () => {
+    if (isListening) {
+      stopRecognition()
       return
     }
 
-    if (isListening) {
-      recognitionRef.current.stop()
-      setIsListening(false)
-      stopMediaRecording()
-    } else {
-      audioBlobRef.current = null
-      audioDurationMsRef.current = 0
-      const ok = await startMediaRecording()
-      if (!ok) {
-        alert("마이크 권한이 필요합니다. 음성 녹음(STT·백엔드 전송용)에 사용됩니다.")
-        return
-      }
-      setTranscript("")
-      try {
-        recognitionRef.current.start()
-      } catch {
-        stopMediaRecording()
-        alert("음성 인식을 시작할 수 없습니다. 잠시 후 다시 시도하세요.")
-        return
-      }
-      setIsListening(true)
+    if (!sttSupported) {
+      alert(
+        "이 브라우저는 Web Speech API(음성 인식)를 지원하지 않습니다. Chrome 또는 Edge를 사용하거나, 텍스트로 입력해 주세요."
+      )
+      return
     }
-  }
 
-  const handleSend = () => {
-    const textToSend = inputText || transcript
-    if (!textToSend.trim()) return
+    setSttHint(null)
+    committedRef.current = inputText.trim() ? `${inputText.trim()} ` : ""
 
-    const blob = audioBlobRef.current
-    const durationMs = audioDurationMsRef.current
-    // TODO(BE 연동): 이 콜백 이후 상위 컴포넌트에서
-    // FormData(audioBlob) 업로드 및 STT/AI 평가 API 호출을 연결하세요.
-    onSendMessage(textToSend.trim(), {
-      audioBlob: blob ?? undefined,
-      audioDurationMs: blob ? durationMs : undefined,
+    const session = startSpeechRecognition({
+      onTranscript: (text, isFinal) => {
+        if (isFinal) {
+          committedRef.current = `${committedRef.current}${text}`.trim()
+          if (committedRef.current) committedRef.current += " "
+        }
+        const display = isFinal
+          ? committedRef.current.trim()
+          : `${committedRef.current}${text}`.trim()
+        setInputText(display)
+      },
+      onError: (message) => {
+        setSttHint(message)
+        stopRecognition()
+      },
+      onEnd: () => {
+        recognitionRef.current = null
+        setIsListening(false)
+        setInputText(committedRef.current.trim())
+      },
     })
 
-    if (blob) {
-      const sec = (durationMs / 1000).toFixed(1)
-      setLastSentHint(
-        `음성 녹음 ${sec}초 · ${(blob.size / 1024).toFixed(1)}KB (서버/API 연동 시 전송)`
-      )
-    } else {
-      setLastSentHint(null)
+    if (!session) {
+      setSttHint("음성 인식을 시작할 수 없습니다.")
+      return
     }
 
-    audioBlobRef.current = null
-    audioDurationMsRef.current = 0
-    setInputText("")
-    setTranscript("")
+    recognitionRef.current = session
+    setIsListening(true)
+  }
+
+  const handleSend = async () => {
+    const textToSend = inputText.trim()
+    if (!textToSend) return
+
+    if (isListening) stopRecognition()
+
+    setIsSending(true)
+    try {
+      await onSendMessage(textToSend)
+      setInputText("")
+      committedRef.current = ""
+      setSttHint(null)
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "메시지 전송 중 오류가 발생했습니다."
+      setSttHint(message)
+    } finally {
+      setIsSending(false)
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
-      handleSend()
+      void handleSend()
     }
   }
 
   return (
     <div className="space-y-3">
+      {!sttSupported && (
+        <p className="text-center text-xs text-amber-700">
+          음성 인식 미지원 브라우저입니다. 텍스트로 입력해 주세요.
+        </p>
+      )}
+
       {isListening && (
         <div className="flex items-center justify-center gap-2 text-sm text-primary">
           <span className="relative flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-primary" />
           </span>
-          <span>듣고 있습니다… (동시에 녹음 중)</span>
+          <span>말씀해 주세요… (인식 중)</span>
         </div>
       )}
 
-      {transcript && isListening && (
-        <div className="text-center text-muted-foreground italic">
-          {`"${transcript}"`}
-        </div>
-      )}
-
-      {lastSentHint && (
-        <p className="text-center text-xs text-muted-foreground">{lastSentHint}</p>
+      {sttHint && (
+        <p className="text-center text-xs text-muted-foreground">{sttHint}</p>
       )}
 
       <div className="flex items-center gap-2">
         <input
           type="text"
           value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
+          onChange={(e) => {
+            setInputText(e.target.value)
+            committedRef.current = e.target.value
+          }}
           onKeyDown={handleKeyDown}
-          placeholder="메시지를 입력하거나 마이크를 누르세요"
+          placeholder={
+            sttSupported
+              ? "메시지 입력 또는 마이크로 말하기"
+              : "메시지를 입력하세요"
+          }
           className="flex-1 rounded-xl border border-input bg-background px-4 py-3 text-base placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          disabled={disabled || isListening}
+          disabled={disabled || isSending}
         />
 
         <Button
           variant="outline"
           size="icon"
-          onClick={() => void toggleListening()}
-          disabled={disabled}
+          onClick={toggleListening}
+          disabled={disabled || isSending || !sttSupported}
           className={cn(
             "h-12 w-12 rounded-xl transition-all",
             isListening && "bg-primary text-primary-foreground hover:bg-primary/90"
@@ -254,8 +172,8 @@ export function VoiceInput({ onSendMessage, disabled }: VoiceInputProps) {
         </Button>
 
         <Button
-          onClick={handleSend}
-          disabled={disabled || (!inputText.trim() && !transcript.trim())}
+          onClick={() => void handleSend()}
+          disabled={disabled || isSending || !inputText.trim()}
           className="h-12 w-12 rounded-xl"
           aria-label="메시지 보내기"
         >

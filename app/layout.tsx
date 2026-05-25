@@ -1,13 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Noto_Sans_KR } from 'next/font/google'
-import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
-
-const notoSansKr = Noto_Sans_KR({ 
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-noto-sans-kr"
-});
 
 export const metadata: Metadata = {
   title: 'Korean Honorific Learning',
@@ -32,9 +24,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className={`${notoSansKr.variable} font-sans antialiased`}>
+      <body className="font-sans antialiased">
         {children}
-        {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
   )

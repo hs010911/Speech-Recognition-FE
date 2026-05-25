@@ -79,7 +79,7 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-noto-sans-kr), 'Noto Sans KR', sans-serif;
+  --font-sans: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
   --font-mono: 'Geist Mono', 'Geist Mono Fallback';
   --color-background: var(--background);
   --color-foreground: var(--foreground);
