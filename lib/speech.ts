@@ -93,16 +93,12 @@ export function startSpeechRecognition(
     stop: () => {
       try {
         recognition.stop()
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     },
     abort: () => {
       try {
         recognition.abort()
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     },
   }
 }

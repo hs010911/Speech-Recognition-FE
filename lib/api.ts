@@ -79,9 +79,7 @@ async function parseErrorMessage(res: Response): Promise<string> {
     if (Array.isArray(body.detail)) {
       return body.detail.map((d) => d.msg).join(", ")
     }
-  } catch {
-    /* ignore non-JSON error body */
-  }
+  } catch {}
   return `요청 실패 (${res.status})`
 }
 

@@ -2,12 +2,12 @@
 
 import { cn } from "@/lib/utils"
 
-interface GrandfatherAvatarProps {
+interface FriendAvatarProps {
   size?: "xs" | "sm" | "md" | "lg"
   className?: string
 }
 
-export function GrandfatherAvatar({ size = "md", className }: GrandfatherAvatarProps) {
+export function FriendAvatar({ size = "md", className }: FriendAvatarProps) {
   const sizes = {
     xs: "h-9 w-9",
     sm: "h-12 w-12",
@@ -33,17 +33,17 @@ export function GrandfatherAvatar({ size = "md", className }: GrandfatherAvatarP
     <div
       className={cn("relative shrink-0", sizes[size], className)}
       role="img"
-      aria-label="할아버지 연습 상대"
+      aria-label="친구 연습 상대"
     >
       <div
         className={cn(
-          "flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-amber-100 shadow-sm",
+          "flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-sky-100 shadow-sm",
           borders[size],
           "border-card"
         )}
       >
         <span className={cn(emojiSizes[size], "leading-none select-none")} aria-hidden>
-          👴
+          👦
         </span>
       </div>
     </div>

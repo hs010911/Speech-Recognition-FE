@@ -1,14 +1,20 @@
 "use client"
 
 import { useState } from "react"
+import { cn } from "@/lib/utils"
 import { TopicSelection } from "@/components/topic-selection"
 import { ConversationScreen } from "@/components/conversation-screen"
+import { FriendAvatar } from "@/components/friend-avatar"
 import { GrandfatherAvatar } from "@/components/grandfather-avatar"
 import { homeCopy } from "@/lib/ui-strings"
 import { getApiBaseUrlForDisplay, startSession, type StartSessionData } from "@/lib/api"
+import { getRoleLabel, getRolePracticeTitle, getRolePracticeTitleRu } from "@/lib/target-roles"
+import type { TargetRole } from "@/lib/target-roles"
 
 export default function Home() {
+  const [targetRole, setTargetRole] = useState<TargetRole>("grandfather")
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
+  const [selectedTargetRole, setSelectedTargetRole] = useState<TargetRole>("grandfather")
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [sessionStart, setSessionStart] = useState<StartSessionData | null>(null)
   const [isStarting, setIsStarting] = useState(false)
@@ -19,6 +25,7 @@ export default function Home() {
       <main className="mx-auto h-dvh w-full max-w-md">
         <ConversationScreen
           topic={selectedTopic}
+          targetRole={selectedTargetRole}
           sessionId={sessionId}
           sessionStart={sessionStart}
           onBack={() => {
@@ -49,10 +56,32 @@ export default function Home() {
       </header>
 
       <div className="flex flex-col items-center py-6">
-        <GrandfatherAvatar size="lg" />
-        <p className="mt-4 font-medium text-foreground">{homeCopy.practiceKo}</p>
+        <div className="flex items-end gap-4">
+          {(["grandfather", "friend"] as const).map((role) => (
+            <button
+              key={role}
+              type="button"
+              onClick={() => setTargetRole(role)}
+              className={cn(
+                "rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                targetRole === role
+                  ? "scale-105 ring-4 ring-primary ring-offset-2 ring-offset-background"
+                  : "scale-95 opacity-50 hover:opacity-80"
+              )}
+              aria-label={`${getRoleLabel(role)} 선택`}
+              aria-pressed={targetRole === role}
+            >
+              {role === "grandfather" ? (
+                <GrandfatherAvatar size="md" />
+              ) : (
+                <FriendAvatar size="md" />
+              )}
+            </button>
+          ))}
+        </div>
+        <p className="mt-4 font-medium text-foreground">{getRolePracticeTitle(targetRole)}</p>
         <p className="text-sm text-muted-foreground" lang="ru">
-          {homeCopy.practiceRu}
+          {getRolePracticeTitleRu(targetRole)}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">{homeCopy.hintKo}</p>
         <p className="text-xs text-muted-foreground/90" lang="ru">
@@ -62,13 +91,15 @@ export default function Home() {
 
       <div className="flex-1 px-4 pb-4">
         <TopicSelection
-          onSelectTopic={async (topic) => {
+          targetRole={targetRole}
+          onTargetRoleChange={setTargetRole}
+          onSelectTopic={async (topic, role) => {
             setIsStarting(true)
             setStartError(null)
             try {
               const resp = await startSession({
                 category: topic,
-                targetRole: "grandfather",
+                targetRole: role,
                 language: "ko",
               })
               const data = resp.data
@@ -76,6 +107,7 @@ export default function Home() {
                 throw new Error("세션 ID를 받지 못했습니다.")
               }
               setSelectedTopic(topic)
+              setSelectedTargetRole(role)
               setSessionId(data.sessionId)
               setSessionStart(data)
             } catch (e) {
@@ -99,7 +131,7 @@ export default function Home() {
             {startError}
             <br />
             <span className="text-muted-foreground">
-              백엔드를 실행했는지 확인하세요: uvicorn app.main:app --reload
+              백엔드를 실행했는지 확인하세요: uvicorn app.main:app --host 127.0.0.1 --port 8000
             </span>
           </p>
         )}
