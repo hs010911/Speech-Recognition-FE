@@ -1,13 +1,18 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import { TopicSelection } from "@/components/topic-selection"
 import { ConversationScreen } from "@/components/conversation-screen"
 import { FriendAvatar } from "@/components/friend-avatar"
 import { GrandfatherAvatar } from "@/components/grandfather-avatar"
 import { homeCopy } from "@/lib/ui-strings"
-import { getApiBaseUrlForDisplay, startSession, type StartSessionData } from "@/lib/api"
+import {
+  checkHealth,
+  getApiBaseUrlForDisplay,
+  startSession,
+  type StartSessionData,
+} from "@/lib/api"
 import { getRoleLabel, getRolePracticeTitle, getRolePracticeTitleRu } from "@/lib/target-roles"
 import type { TargetRole } from "@/lib/target-roles"
 
@@ -19,6 +24,26 @@ export default function Home() {
   const [sessionStart, setSessionStart] = useState<StartSessionData | null>(null)
   const [isStarting, setIsStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
+  const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">(
+    "checking"
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const resp = await checkHealth()
+        if (!cancelled) {
+          setApiStatus(resp.success ? "online" : "offline")
+        }
+      } catch {
+        if (!cancelled) setApiStatus("offline")
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   if (selectedTopic && sessionId && sessionStart) {
     return (
@@ -52,6 +77,9 @@ export default function Home() {
         </p>
         <p className="mt-2 text-[11px] text-muted-foreground/80">
           API: {getApiBaseUrlForDisplay()}
+          {apiStatus === "checking" && " · 연결 확인 중…"}
+          {apiStatus === "online" && " · 백엔드 연결됨"}
+          {apiStatus === "offline" && " · 백엔드 미연결 (세션 시작·주제 목록 제한)"}
         </p>
       </header>
 

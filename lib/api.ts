@@ -84,10 +84,15 @@ async function parseErrorMessage(res: Response): Promise<string> {
 }
 
 const FETCH_TIMEOUT_MS = 4_000
+const TURN_FETCH_TIMEOUT_MS = 20_000
 
-async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+async function fetchJson<T>(
+  path: string,
+  init?: RequestInit,
+  timeoutMs = FETCH_TIMEOUT_MS
+): Promise<T> {
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const res = await fetch(apiUrl(path), {
       ...init,
@@ -100,7 +105,7 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") {
       throw new Error(
-        `서버 응답 시간 초과(${FETCH_TIMEOUT_MS / 1000}초). 백엔드가 http://localhost:8000 에서 실행 중인지 확인하세요.`
+        `서버 응답 시간 초과(${timeoutMs / 1000}초). 백엔드가 ${getApiBaseUrl()} 에서 실행 중인지 확인하세요.`
       )
     }
     throw e
@@ -143,7 +148,8 @@ export async function postTextTurn(params: {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: params.text }),
-    }
+    },
+    TURN_FETCH_TIMEOUT_MS
   )
 }
 

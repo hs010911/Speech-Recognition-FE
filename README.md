@@ -8,15 +8,20 @@
 
 ```cmd
 cd C:\Users\hanse\Desktop\Speech-Recognition-Team-2-Formal-Speech-Conversion-BE-main
-pip install fastapi uvicorn pydantic joblib pandas scikit-learn
-uvicorn app.main:app --host 127.0.0.1 --port 8000
+python -m pip install fastapi uvicorn pydantic joblib pandas scikit-learn openai python-dotenv
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-> 이 저장소에는 `requirements.txt`가 없습니다. 위 `pip install`로 설치하세요.
+> `requirements.txt`가 없으면 위 패키지를 한 번 설치하세요.  
+> `pip`/`python`이 MSYS 등 다른 Python을 가리키면 Miniconda 전체 경로를 쓰세요.  
+> 예: `C:\Users\hanse\miniconda3\python.exe -m pip install ...`  
+> 예: `C:\Users\hanse\miniconda3\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000`
 
-→ `http://localhost:8000` · API 문서: `http://localhost:8000/docs`
+→ `http://127.0.0.1:8000` · 헬스: `http://127.0.0.1:8000/api/health` · 문서: `http://127.0.0.1:8000/docs`
 
-PC가 버벅이면 uvicorn에 `--reload`를 붙이지 마세요.
+터미널에 `Uvicorn running on http://127.0.0.1:8000`이 보이면 백엔드 기동 성공입니다. PC가 버벅이면 `--reload`는 빼도 됩니다.
+
+`models/formality_classifier.joblib`이 없으면 백엔드 폴더에서 `train_classifier.py`를 먼저 실행하세요.
 
 ### 2) 프론트엔드
 
