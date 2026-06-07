@@ -63,6 +63,18 @@ export type CategoriesResponse = ApiSuccess<{ id: string; name: string }[]>
 export type HealthResponse = ApiSuccess<{ status: string }>
 export type EndSessionResponse = ApiSuccess<{ sessionId: string; ended: boolean }>
 
+export type FreeTalkRequest = {
+  text: string
+}
+
+export type FreeTalkResponseData = {
+  aiText: string
+  targetRole: string
+}
+
+export type FreeTalkResponse = ApiSuccess<FreeTalkResponseData>
+export type StartFreeTalkResponse = ApiSuccess<{ message: string }>
+
 function getApiBaseUrl(): string {
   const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
   return base.replace(/\/$/, "")
@@ -157,6 +169,28 @@ export async function endSession(sessionId: string): Promise<EndSessionResponse>
   return fetchJson<EndSessionResponse>(
     `/sessions/${encodeURIComponent(sessionId)}/end`,
     { method: "POST" }
+  )
+}
+
+export async function startFreeTalk(sessionId: string): Promise<StartFreeTalkResponse> {
+  return fetchJson<StartFreeTalkResponse>(
+    `/sessions/${encodeURIComponent(sessionId)}/freetalk/start`,
+    { method: "POST" }
+  )
+}
+
+export async function postFreeTalkText(params: {
+  sessionId: string
+  text: string
+}): Promise<FreeTalkResponse> {
+  return fetchJson<FreeTalkResponse>(
+    `/sessions/${encodeURIComponent(params.sessionId)}/freetalk/text`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: params.text }),
+    },
+    TURN_FETCH_TIMEOUT_MS
   )
 }
 

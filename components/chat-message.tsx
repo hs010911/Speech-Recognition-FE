@@ -24,6 +24,7 @@ interface ChatMessageProps {
     messageRu?: string
     suggestion?: string
   }
+  isFreeTalk?: boolean
 }
 
 export function ChatMessage({
@@ -36,6 +37,7 @@ export function ChatMessage({
   onOfferDecline,
   subtitleRu,
   feedback,
+  isFreeTalk = false,
 }: ChatMessageProps) {
   const effectiveBotRole = botRole ?? targetRole
   return (
@@ -99,7 +101,7 @@ export function ChatMessage({
           </div>
         </div>
 
-        {offerNextRole && !isUser && (
+        {offerNextRole && !isUser && !isFreeTalk && (
           <div className={cn("flex w-full flex-col gap-2", isUser ? "items-end" : "items-start")}>
             <div className="flex gap-2">
               <button

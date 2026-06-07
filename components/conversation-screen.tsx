@@ -10,7 +10,9 @@ import { GrandfatherAvatar } from "./grandfather-avatar"
 import {
   endSession,
   isAppropriateJudgement,
+  postFreeTalkText,
   postTextTurn,
+  startFreeTalk,
   startSession,
   type StartSessionData,
 } from "@/lib/api"
@@ -56,6 +58,7 @@ export function ConversationScreen({
   const [statusNote, setStatusNote] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
+  const [isFreeTalk, setIsFreeTalk] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -100,6 +103,77 @@ export function ConversationScreen({
       await endSession(currentSessionId)
     } catch {}
     onBack()
+  }
+
+  const handleStartFreeTalk = async () => {
+    if (isSubmitting) return
+    setIsSubmitting(true)
+    setStatusNote(null)
+
+    try {
+      const resp = await startFreeTalk(currentSessionId)
+      if (!resp.success) {
+        throw new Error("자유 대화 모드를 시작할 수 없습니다.")
+      }
+      setIsFreeTalk(true)
+      setIsComplete(false)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `freetalk-start-${Date.now()}`,
+          text: "자유 대화 모드로 전환되었습니다. 이제 자유롭게 대화할 수 있어요!",
+          isUser: false,
+          botRole: currentTargetRole,
+        },
+      ])
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "자유 대화 시작 중 오류가 발생했습니다."
+      setStatusNote(msg)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleFreeTalkMessage = async (text: string) => {
+    if (isSubmitting) return
+
+    const trimmed = text.trim()
+    if (!trimmed) {
+      setStatusNote("인식된 문장이 없습니다. 다시 말하거나 직접 입력해 주세요.")
+      return
+    }
+
+    setIsSubmitting(true)
+    setStatusNote(null)
+
+    try {
+      const resp = await postFreeTalkText({ sessionId: currentSessionId, text: trimmed })
+      if (!resp.success || !resp.data) {
+        throw new Error("서버 응답이 올바르지 않습니다.")
+      }
+
+      const { aiText } = resp.data
+
+      const userMessage: ChatMessageModel = {
+        id: `user-${Date.now()}`,
+        text: trimmed,
+        isUser: true,
+      }
+
+      const botMessage: ChatMessageModel = {
+        id: `bot-${Date.now()}`,
+        text: aiText,
+        isUser: false,
+        botRole: currentTargetRole,
+      }
+
+      setMessages((prev) => [...prev, userMessage, botMessage])
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "자유 대화 중 오류가 발생했습니다."
+      setStatusNote(msg)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const showFollowUpOfferIfNeeded = (justCompletedRole: TargetRole) => {
@@ -162,6 +236,11 @@ export function ConversationScreen({
   }
 
   const handleSendMessage = async (text: string) => {
+    if (isFreeTalk) {
+      await handleFreeTalkMessage(text)
+      return
+    }
+
     if (isComplete || isSubmitting) return
 
     const trimmed = text.trim()
@@ -315,6 +394,7 @@ export function ConversationScreen({
               )
             }}
             feedback={message.feedback}
+            isFreeTalk={isFreeTalk}
           />
         ))}
         <div ref={messagesEndRef} />
@@ -327,14 +407,30 @@ export function ConversationScreen({
         {isSubmitting && (
           <p className="mb-2 text-center text-xs text-primary">백엔드에서 평가 중…</p>
         )}
-        {isComplete && (
-          <p className="mb-2 text-center text-xs text-emerald-700">
-            연습이 완료되었습니다. 뒤로 가기로 주제를 다시 선택할 수 있어요.
+        {isComplete && !isFreeTalk && (
+          <div className="mb-2 flex flex-col gap-2">
+            <p className="text-center text-xs text-emerald-700">
+              연습이 완료되었습니다. 뒤로 가기로 주제를 다시 선택할 수 있어요.
+            </p>
+            <Button
+              onClick={() => void handleStartFreeTalk()}
+              disabled={isSubmitting}
+              variant="outline"
+              size="sm"
+              className="w-full"
+            >
+              자유 대화 모드 시작
+            </Button>
+          </div>
+        )}
+        {isFreeTalk && (
+          <p className="mb-2 text-center text-xs text-primary">
+            자유 대화 모드
           </p>
         )}
         <VoiceInput
           onSendMessage={handleSendMessage}
-          disabled={isComplete || isSubmitting}
+          disabled={(isComplete && !isFreeTalk) || isSubmitting}
         />
       </div>
     </div>
